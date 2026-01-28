@@ -19,20 +19,28 @@ This project provides a scalable and maintainable test automation framework desi
 
 ```
 automation-exercise/
-├── tests/          # Test cases (to be implemented)
+├── core/           # Core framework components
+│   ├── driver_factory.py    # Playwright driver factory
+│   ├── base_test.py          # Base test class with fixtures
+│   ├── README.md             # Core layer documentation
+│   └── __init__.py
+├── tests/          # Test cases
+│   └── test_core_demo.py     # Sample tests
 ├── pages/          # Page Object Model classes (to be implemented)
 ├── config/         # Configuration files
-│   ├── config.yaml          # General framework settings
-│   ├── browsers.yaml        # Browser profiles and capabilities
-│   ├── reporting.yaml       # Reporting configuration
-│   ├── config_loader.py     # Configuration loader class
+│   ├── config.yaml           # General framework settings
+│   ├── browsers.yaml         # Browser profiles and capabilities
+│   ├── reporting.yaml        # Reporting configuration
+│   ├── config_loader.py      # Configuration loader class
+│   ├── README.md             # Configuration documentation
 │   └── __init__.py
 ├── utils/          # Helper utilities and common functions
 ├── reports/        # Test execution reports (auto-generated)
 ├── logs/           # Test execution logs (auto-generated)
+├── conftest.py     # Pytest configuration and global fixtures
 ├── requirements.txt
 ├── pytest.ini
-├── validate_config.py       # Configuration validation script
+├── validate_config.py        # Configuration validation script
 └── README.md
 ```
 
@@ -87,11 +95,32 @@ playwright --version
 
 ## Running Tests
 
-### Run All Tests
+### Run Sample Demo Tests
 
 ```bash
+# Run all tests
 pytest
+
+# Run specific test file
+pytest tests/test_core_demo.py
+
+# Run with verbose output
+pytest -v
+
+# Run specific test
+pytest tests/test_core_demo.py::TestCoreFramework::test_driver_initialization -v
 ```
+
+### Run Tests with Specific Browser
+
+```bash
+# Using command line option
+pytest --browser=firefox_latest
+
+# Using pytest marker in code
+pytest -k test_with_firefox
+```
+
 ### Validate Configuration
 
 ```bash
@@ -155,6 +184,48 @@ chrome_config = loader.get_browser_config('chrome_127')
 all_config = loader.get_all('config')
 ```
 
+### Using Core Layer (DriverFactory + BaseTest)
+
+**Writing Tests:**
+```python
+from core.base_test import BaseTest
+import pytest
+
+class TestExample(BaseTest):
+    """All test classes should inherit from BaseTest."""
+    
+    def test_homepage(self, driver):
+        """
+        The 'driver' fixture provides an isolated Playwright Page.
+        Setup and teardown are handled automatically.
+        """
+        driver.goto("https://example.com")
+        assert "Example" in driver.title()
+    
+    @pytest.mark.browser("firefox_latest")
+    def test_with_firefox(self, driver):
+        """Use markers to specify browser profile."""
+        driver.goto("https://example.com")
+        assert driver.url == "https://example.com/"
+```
+
+**Direct DriverFactory Usage (Advanced):**
+```python
+from core.driver_factory import DriverFactory
+
+# Create factory
+factory = DriverFactory(browser_name='chrome_127', remote=False)
+
+# Get driver with retry
+driver = factory.get_driver(max_retries=3)
+
+# Use driver
+driver.goto("https://example.com")
+
+# Clean up
+factory.quit_driver()
+```
+
 ### Generate Allure Report
 
 ```bash
@@ -173,7 +244,39 @@ allure serve reports/allure-results
 - Keep test data separate from test logic
 - Leverage YAML configuration for environment-specific settings
 - Use ConfigLoader for all configuration access
+- Inherit from BaseTest for all test classes
+- Use the 'driver' fixture for browser access
+- Let fixtures handle setup and teardown
+- Write isolated, independent tests for parallel execution
 - Document complex test scenarios
+
+## Core Components
+
+### DriverFactory
+- Creates Playwright browser instances
+- Supports local and remote execution
+- Reads browser profiles from `config/browsers.yaml`
+- Implements retry mechanism for reliability
+- Provides isolated sessions per test
+- Comprehensive logging and error handling
+
+### BaseTest
+- Base class for all test classes
+- Provides `driver` fixture for tests
+- Automatic setup and teardown
+- Screenshot capture on test failure
+- Support for parallel execution (pytest-xdist)
+- Browser selection via pytest markers
+- Proper resource cleanup
+
+### Key Features
+- **Isolation**: Each test gets its own browser instance
+- **Configuration-driven**: All settings in YAML files
+- **Retry mechanism**: Automatic retry on driver creation failure
+- **Screenshot on failure**: Automatic screenshot when tests fail
+- **Parallel execution**: Full support for pytest-xdist
+- **Logging**: Comprehensive logging with loguru
+- **Flexibility**: Easy to extend and customize
 
 ## Project Status
 
@@ -190,13 +293,23 @@ allure serve reports/allure-results
   - Three configuration files: config.yaml, browsers.yaml, reporting.yaml
   - Configuration validation script
 
+- **STEP 2**: Core Layer (Driver Management)
+  - DriverFactory class for Playwright browser management
+  - BaseTest class with pytest fixtures
+  - Support for local and remote execution
+  - Retry mechanism for driver creation
+  - Screenshot capture on test failure
+  - Parallel execution support (pytest-xdist)
+  - Isolated browser sessions per test
+  - Sample demo tests
+
 ### 🔄 Next Steps
 
-- **STEP 2**: Driver/Browser management layer
 - **STEP 3**: Page Object Model implementation
 - **STEP 4**: Test utilities and helpers
-- **STEP 5**: Test implementation
+- **STEP 5**: Real-world test implementation
 - **STEP 6**: CI/CD integration
+- **STEP 7**: Advanced reporting and analytics
 
 ## License
 

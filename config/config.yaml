@@ -1,7 +1,7 @@
 # General Framework Configuration
 
 # Application settings
-base_url: "https://example.com"
+base_url: "https://automationteststore.com"
 
 # Grid/Remote execution settings
 grid_url: "http://localhost:4444/wd/hub"
@@ -19,6 +19,15 @@ retry_delay: 1
 headless: false
 browser_width: 1920
 browser_height: 1080
+
+# Advanced Browser Context settings
+user_agent: null  # Custom user agent (null = use browser default)
+locale: "en-US"
+timezone: null    # Timezone ID (null = use system timezone)
+permissions: []   # Array of permissions to grant (e.g., ['geolocation'])
+
+# Debug settings
+slow_motion: 0    # Add delay (ms) between actions for debugging (0 = disabled)
 
 # Logging settings
 log_level: "INFO"
