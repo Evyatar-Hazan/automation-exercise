@@ -3,12 +3,13 @@
 ## Table of Contents
 1. [Project Structure](#project-structure)
 2. [Framework Components](#framework-components)
-3. [Step 5: Reporting System](#step-5-reporting-system) ⭐ NEW
-4. [Step 4: Locator Strategy](#step-4-locator-strategy)
-5. [Step 3: BaseTest + Fixtures](#step-3-basetest--fixtures)
-6. [Configuration System](#configuration-system)
-7. [Running Tests](#running-tests)
-8. [Features Summary](#features-summary)
+3. [Step 6: Dynamic Browser Matrix](#step-6-dynamic-browser-matrix) ⭐ NEW
+4. [Step 5: Reporting System](#step-5-reporting-system)
+5. [Step 4: Locator Strategy](#step-4-locator-strategy)
+6. [Step 3: BaseTest + Fixtures](#step-3-basetest--fixtures)
+7. [Configuration System](#configuration-system)
+8. [Running Tests](#running-tests)
+9. [Features Summary](#features-summary)
 
 ---
 
@@ -81,7 +82,314 @@ automation-exercise/
 
 ## Framework Components
 
-### 0. Reporting System (reporting/) ⭐ NEW
+### 0. Dynamic Browser Matrix (Step 6) ⭐ NEW
+
+#### Overview
+Fully dynamic browser matrix system that enables running the same tests across multiple browsers/versions without any test code changes. Tests are automatically parametrized at pytest collection time.
+
+#### Key Architecture
+
+**Collection-Time Parametrization:**
+```
+pytest_generate_tests() hook (core/conftest.py)
+    ↓
+Load matrix from config/browsers.yaml
+    ↓
+Parametrize tests with profile dictionaries
+    ↓
+One test → Multiple variants: test_name[chrome_127], test_name[chrome_latest], test_name[firefox_latest]
+    ↓
+Each variant gets isolated browser_profile fixture
+    ↓
+DriverFactory creates separate browser per variant
+```
+
+**Configuration-Driven:**
+```yaml
+# config/browsers.yaml
+matrix:
+  - name: chrome_127
+    browserName: "chromium"
+    browserVersion: "127.0"
+    headless: false
+    viewport: {width: 1920, height: 1080}
+  
+  - name: chrome_latest
+    browserName: "chromium"
+    browserVersion: "latest"
+    headless: false
+  
+  - name: firefox_latest
+    browserName: "firefox"
+    browserVersion: "latest"
+    headless: false
+```
+
+#### Components
+
+**ConfigLoader** (`config/config_loader.py`)
+- New method: `get_browser_matrix() -> List[Dict[str, Any]]`
+- Loads `matrix:` section from browsers.yaml
+- Fallback support for legacy `browsers:` dictionary format
+- Caching for performance (matrix loaded once per collection)
+
+```python
+config_loader = ConfigLoader()
+matrix = config_loader.get_browser_matrix()
+# Returns: [
+#   {'name': 'chrome_127', 'browserName': 'chromium', 'browserVersion': '127.0', ...},
+#   {'name': 'chrome_latest', 'browserName': 'chromium', 'browserVersion': 'latest', ...},
+#   {'name': 'firefox_latest', 'browserName': 'firefox', 'browserVersion': 'latest', ...}
+# ]
+```
+
+**DriverFactory** (`core/driver_factory.py`)
+- Refactored `__init__()` to accept `Union[str, Dict[str, Any]]` browser_profile
+- Handles dictionary input (preferred from parametrization)
+- Supports string input for backward compatibility
+- Extracts config from profile dict at initialization
+
+```python
+# New: Accept profile dict (from pytest parametrization)
+factory = DriverFactory(browser_profile={
+    'name': 'chrome_127',
+    'browserName': 'chromium',
+    'browserVersion': '127.0',
+    'headless': False
+})
+
+# Still works: Legacy string input (backward compat)
+factory = DriverFactory(browser_profile='chrome_127')
+```
+
+**pytest_generate_tests Hook** (`core/conftest.py`)
+- Collection-time hook that parametrizes tests
+- Loads browser matrix only once, caches it
+- Supports CLI override: `pytest --browser=chrome_127`
+- Filters matrix when override specified
+
+```python
+def pytest_generate_tests(metafunc):
+    """Collection-time parametrization hook"""
+    if 'browser_profile' not in metafunc.fixturenames:
+        return
+    
+    # Load matrix once per collection
+    global _BROWSER_MATRIX
+    if _BROWSER_MATRIX is None:
+        config_loader = ConfigLoader()
+        _BROWSER_MATRIX = config_loader.get_browser_matrix()
+    
+    # Handle CLI override: pytest --browser=chrome_127
+    browser_override = metafunc.config.getoption("--browser", default=None)
+    if browser_override:
+        matrix_to_use = [p for p in _BROWSER_MATRIX if p.get('name') == browser_override]
+    else:
+        matrix_to_use = _BROWSER_MATRIX
+    
+    # Parametrize with profile dicts and names as IDs
+    profile_ids = [p.get('name') for p in enumerate(matrix_to_use)]
+    metafunc.parametrize('browser_profile', matrix_to_use, ids=profile_ids, scope='function')
+```
+
+**browser_profile Fixture** (`core/conftest.py`)
+- New fixture that receives parametrized profile dictionaries
+- No scope specification (test-level by default)
+- Provides dict to driver fixture
+
+```python
+@pytest.fixture(scope="function")
+def browser_profile(request) -> Dict[str, Any]:
+    """Receives parametrized browser profile dict"""
+    return request.param
+```
+
+**driver Fixture** (`core/conftest.py`)
+- Refactored to accept `browser_profile` parameter
+- Creates DriverFactory with profile dict
+- Ensures isolated browser per test variant
+- Full cleanup after test
+
+```python
+@pytest.fixture(scope="function")
+def driver(browser_profile: Dict[str, Any]) -> Generator[Page, None, None]:
+    """Function-scoped fixture receives parametrized browser_profile"""
+    factory = DriverFactory(browser_profile=browser_profile, remote=False)
+    page_instance = factory.get_driver()
+    yield page_instance
+    factory.quit_driver()
+```
+
+#### Test Execution Flow
+
+**Before:**
+```
+test_login() → Runs once → Uses first browser
+test_logout() → Runs once → Uses first browser
+```
+
+**After:**
+```
+pytest_generate_tests() [Collection Time]
+    ↓
+Test 1: test_login[chrome_127]
+Test 2: test_login[chrome_latest]
+Test 3: test_login[firefox_latest]
+Test 4: test_logout[chrome_127]
+Test 5: test_logout[chrome_latest]
+Test 6: test_logout[firefox_latest]
+
+pytest --collect-only output:
+6 tests collected (2 tests × 3 browsers)
+```
+
+**Isolation:**
+- Each variant: New browser instance
+- Each variant: New browser context
+- Each variant: New page object
+- Full cleanup after each variant
+- No shared state between variants
+
+#### Usage Examples
+
+**Simple Test (No Changes Needed):**
+```python
+class TestLoginFlow(BaseTest):
+    def test_login_with_valid_credentials(self, driver):
+        """Automatically runs on all 3 browsers in matrix"""
+        driver.goto("https://example.com/login")
+        # No browser-specific logic needed
+        # Framework handles everything
+        
+    def test_logout(self, driver):
+        """Also automatically runs on all 3 browsers"""
+        # ... test code ...
+```
+
+**Pytest Output:**
+```
+test_login_with_valid_credentials[chrome_127] PASSED
+test_login_with_valid_credentials[chrome_latest] PASSED
+test_login_with_valid_credentials[firefox_latest] PASSED
+test_logout[chrome_127] PASSED
+test_logout[chrome_latest] PASSED
+test_logout[firefox_latest] PASSED
+
+6 passed in 2.34s
+```
+
+**CLI Override (Single Browser):**
+```bash
+# Run only on Chrome 127
+pytest tests/ --browser=chrome_127
+
+# Output:
+# test_login_with_valid_credentials[chrome_127] PASSED
+# test_logout[chrome_127] PASSED
+# 2 passed in 0.45s
+```
+
+**Parallel Execution:**
+```bash
+# Run all browser variants in parallel (pytest-xdist)
+pytest tests/ -n auto
+
+# pytest-xdist distributes:
+# Worker 1: test_login[chrome_127]
+# Worker 2: test_login[chrome_latest]
+# Worker 3: test_login[firefox_latest]
+# Worker 1: test_logout[chrome_127] (after first test)
+# ...
+```
+
+#### Adding New Browsers
+
+**Step 1: Edit config/browsers.yaml**
+```yaml
+matrix:
+  - name: chrome_127
+    browserName: "chromium"
+    browserVersion: "127.0"
+    headless: false
+  
+  - name: chrome_latest
+    browserName: "chromium"
+    browserVersion: "latest"
+  
+  - name: firefox_latest
+    browserName: "firefox"
+    browserVersion: "latest"
+  
+  - name: webkit_latest  # NEW
+    browserName: "webkit"
+    browserVersion: "latest"
+```
+
+**Step 2: Run Tests**
+```bash
+pytest tests/
+# Automatically runs on 4 browsers now!
+# No test code changes required
+```
+
+**Available Browser Types:**
+- `chromium` (Chrome, Edge, Opera)
+- `firefox` (Firefox)
+- `webkit` (Safari)
+
+#### Features
+
+✅ **Zero Test Changes** - Same test runs on all browsers automatically
+✅ **YAML Configuration** - Add/remove browsers via config only
+✅ **Parallel Execution** - pytest-xdist compatible, linear scaling
+✅ **Full Isolation** - Each browser variant has completely separate instance
+✅ **Flexible Profiles** - Each browser can have different settings (headless, viewport, etc.)
+✅ **CLI Override** - `--browser=name` filters to specific browser
+✅ **Performance** - Matrix loaded once at collection, negligible overhead
+✅ **Backward Compatible** - Legacy string parameters still work
+✅ **Legacy Format Support** - Old YAML `browsers:` section still works
+
+#### Architecture Diagram
+
+```
+config/browsers.yaml (YAML matrix definition)
+        ↓
+ConfigLoader.get_browser_matrix() (loads & caches)
+        ↓
+pytest_generate_tests() (collection-time)
+        ↓
+Parametrize tests with profile dicts
+        ↓
+browser_profile fixture (receives parametrized dict)
+        ↓
+driver fixture (passes to DriverFactory)
+        ↓
+DriverFactory.__init__(browser_profile=dict)
+        ↓
+Playwright browser created with profile settings
+        ↓
+Test executes on specific browser variant
+        ↓
+Cleanup (browser.close(), context.close())
+```
+
+#### Known Patterns
+
+**What Tests Should NOT Do:**
+❌ Don't hardcode browser type in test
+❌ Don't use @pytest.mark.browser() decorator (removed, automatic now)
+❌ Don't create DriverFactory directly (use driver fixture)
+❌ Don't access browser_profile dict directly (it's for framework use)
+
+**What Tests SHOULD Do:**
+✅ Use `driver` fixture parameter
+✅ Keep test logic browser-agnostic
+✅ Define browser behavior in config/browsers.yaml
+✅ Use ConfigLoader if accessing browser config
+
+---
+
+### 1. Reporting System (reporting/)
 
 #### Overview
 Abstraction layer for test reporting that enables easy switching between Allure, Extent Reports, Report Portal, etc. without changing test code.
@@ -159,14 +467,34 @@ browser_width: 1920
 browser_height: 1080
 ```
 
-**config/browsers.yaml** - Browser profiles:
+**config/browsers.yaml** - Browser profiles (with new matrix format):
 ```yaml
-chrome_127:
-  browserName: chromium
-  version: "127"
-firefox_latest:
-  browserName: firefox
-  headless: false
+# 🆕 NEW: Dynamic browser matrix for parametrization
+matrix:
+  - name: chrome_127
+    browserName: "chromium"
+    browserVersion: "127.0"
+    headless: false
+    viewport: {width: 1920, height: 1080}
+    args: ["--disable-blink-features=AutomationControlled"]
+  
+  - name: chrome_latest
+    browserName: "chromium"
+    browserVersion: "latest"
+    headless: false
+  
+  - name: firefox_latest
+    browserName: "firefox"
+    browserVersion: "latest"
+    headless: false
+
+# Legacy format still supported for backward compatibility
+browsers:
+  chrome_127:
+    browserName: chromium
+    version: "127"
+  firefox_latest:
+    browserName: firefox
 ```
 
 **config/reporting.yaml** - Reporting settings
@@ -176,6 +504,7 @@ firefox_latest:
 **DriverFactory class** - Creates and manages Playwright browsers:
 - ✅ Creates isolated browser instances
 - ✅ Supports Playwright sync API
+- ✅ **NEW: Accepts Union[str, Dict[str, Any]] browser_profile** (profile dict from parametrization)
 - ✅ Configurable browser profiles (from browsers.yaml)
 - ✅ Handles browser context and page creation
 - ✅ Automatic cleanup on teardown
@@ -185,7 +514,13 @@ firefox_latest:
 ```python
 from core.driver_factory import DriverFactory
 
-factory = DriverFactory(browser_name="chrome_127", remote=False)
+# NEW: From pytest parametrization (recommended)
+profile_dict = {'name': 'chrome_127', 'browserName': 'chromium', 'browserVersion': '127.0', ...}
+factory = DriverFactory(browser_profile=profile_dict, remote=False)
+
+# Legacy: By profile name (still supported)
+factory = DriverFactory(browser_profile="chrome_127", remote=False)
+
 page = factory.get_driver()
 # ... use page ...
 factory.quit_driver()
@@ -381,26 +716,73 @@ LocatorUtility uses `element_timeout` automatically.
 ### Basic Execution
 
 ```bash
-# Run all tests
+# 🆕 NEW: Run all tests on all browsers in matrix (default behavior)
 pytest
 
-# Run specific test file
-pytest tests/test_locator_demo.py
+# Run specific test file (on all browsers)
+pytest tests/test_core_demo.py
 
-# Run specific test
-pytest tests/test_locator_demo.py::TestLocatorFallbackDemo::test_fallback_with_intentional_bad_locator
+# Run specific test class (on all browsers)
+pytest tests/test_core_demo.py::TestCoreFramework
 
-# Verbose output
+# Verbose output (shows parametrization variants)
 pytest -v
 
 # With detailed output and logging
 pytest -v -s
 
-# Specific browser
-pytest --browser=firefox_latest
+# 🆕 NEW: Run on specific browser only (matrix override)
+pytest tests/ --browser=chrome_127
+
+# 🆕 NEW: Run on all browsers, list what will run
+pytest tests/ --collect-only
+
+# 🆕 NEW: Run on all browsers in parallel (pytest-xdist)
+pytest tests/ -n auto
 
 # Remote execution
 pytest --remote
+```
+
+### Output Examples
+
+**Standard Run (All Browsers):**
+```bash
+$ pytest tests/ -v
+collected 6 items
+
+tests/test_core_demo.py::TestCoreFramework::test_driver_initialization[chrome_127] PASSED
+tests/test_core_demo.py::TestCoreFramework::test_driver_initialization[chrome_latest] PASSED
+tests/test_core_demo.py::TestCoreFramework::test_driver_initialization[firefox_latest] PASSED
+tests/test_core_demo.py::TestCoreFramework::test_config_fixture[chrome_127] PASSED
+tests/test_core_demo.py::TestCoreFramework::test_config_fixture[chrome_latest] PASSED
+tests/test_core_demo.py::TestCoreFramework::test_config_fixture[firefox_latest] PASSED
+
+6 passed in 2.34s
+```
+
+**With --browser Override:**
+```bash
+$ pytest tests/ --browser=chrome_127 -v
+collected 2 items
+
+tests/test_core_demo.py::TestCoreFramework::test_driver_initialization[chrome_127] PASSED
+tests/test_core_demo.py::TestCoreFramework::test_config_fixture[chrome_127] PASSED
+
+2 passed in 0.45s
+```
+
+**With --collect-only (Preview):**
+```bash
+$ pytest tests/ --collect-only
+collected 6 items
+
+<Function test_driver_initialization[chrome_127]>
+<Function test_driver_initialization[chrome_latest]>
+<Function test_driver_initialization[firefox_latest]>
+<Function test_config_fixture[chrome_127]>
+<Function test_config_fixture[chrome_latest]>
+<Function test_config_fixture[firefox_latest]>
 ```
 
 ### Output
@@ -408,10 +790,10 @@ pytest --remote
 Each run creates:
 ```
 reports/run_20260128_154520/
-├── allure-results/           ← Allure report data
+├── allure-results/           ← Allure report data (one per test variant)
 │   ├── 000018f0-f5f3-44c5-result.json
 │   ├── 002db407-07a6-407f-attachment.txt
-│   └── ... (one per test)
+│   └── ... (6 test results when running all browsers)
 ├── email_field_20260128_154520.png
 ├── search_button_20260128_154521.png
 └── ... (failures only)
@@ -472,18 +854,30 @@ allure generate reports/run_20260128_154520/allure-results/ -o reports/allure-ht
 - ✅ Loguru integration
 - ✅ **NEW: Extensible ReportingManager (Allure, Extent, Report Portal ready)**
 
-#### Reporting Abstraction ⭐ NEW
+#### Reporting Abstraction
 - ✅ Abstract Reporter interface
 - ✅ AllureReporter implementation
 - ✅ ReportingManager facade
 - ✅ Configuration-driven reporter type
 - ✅ Zero test changes when switching reporters
 
+#### Dynamic Browser Matrix ⭐ NEW (Step 6)
+- ✅ YAML-based matrix configuration (browsers.yaml:matrix)
+- ✅ Collection-time parametrization via pytest_generate_tests hook
+- ✅ Zero test code changes (same test runs on all browsers)
+- ✅ Full browser isolation (each variant has separate instance)
+- ✅ CLI override support (`--browser=profile_name`)
+- ✅ Flexible profile dicts (different settings per browser)
+- ✅ Backward compatible (legacy string parameters work)
+- ✅ pytest-xdist ready (parallel execution support)
+- ✅ Easy extension (add browser in YAML, tests auto-adapt)
+
 #### Parallel Execution
 - ✅ pytest-xdist compatible
 - ✅ Isolated browser sessions
 - ✅ Per-run report directories
 - ✅ No global state
+- ✅ **NEW: Browser matrix parametrization for linear scaling**
 
 ### ⚙️ Framework Defaults
 
@@ -624,12 +1018,14 @@ This framework provides:
 4. **Production-ready** - Logging, reporting, screenshots
 5. **Scalable** - Parallel execution support
 6. **Maintainable** - Configuration-driven, page object pattern
-7. **Extensible Reporting** ⭐ NEW - Easy switching between Allure, Extent, Report Portal without code changes
+7. **Extensible Reporting** - Easy switching between Allure, Extent, Report Portal without code changes
+8. **Dynamic Browser Matrix** ⭐ NEW - Automatic test parametrization across multiple browsers/versions with zero test code changes
 
 **Total Components:**
+- ✅ 1 browser matrix parametrization system (pytest_generate_tests hook, ConfigLoader.get_browser_matrix())
 - ✅ 1 reporting abstraction module (Reporter, AllureReporter, ReportingManager)
-- ✅ 3 pytest fixtures
-- ✅ 4 pytest hooks
+- ✅ 3 pytest fixtures (driver, config, browser_profile)
+- ✅ 5 pytest hooks (pytest_generate_tests, pytest_configure, pytest_runtest_makereport, setup_test_environment, etc.)
 - ✅ 2 page object examples
 - ✅ 2 test suites
 - ✅ 5 locator types

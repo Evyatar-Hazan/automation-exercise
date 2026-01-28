@@ -5,7 +5,7 @@ Supports both local and remote execution with retry mechanisms.
 """
 
 import time
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page, Playwright
 from loguru import logger
 
@@ -19,28 +19,58 @@ class DriverFactory:
     This class handles:
     - Local browser execution
     - Remote execution via Selenium Grid / Moon
-    - Browser configuration from YAML files
+    - Browser configuration from YAML files or profile dictionaries
     - Retry mechanism for driver creation
     - Isolated browser sessions per test
     """
     
-    def __init__(self, browser_name: Optional[str] = None, remote: bool = False):
+    def __init__(
+        self,
+        browser_profile: Optional[Union[str, Dict[str, Any]]] = None,
+        remote: bool = False
+    ):
         """
         Initialize the DriverFactory.
         
         Args:
-            browser_name: Name of browser profile from browsers.yaml 
-                         (e.g., 'chrome_127', 'firefox_latest').
-                         If None, uses default browser from config.
+            browser_profile: Either:
+                - Browser profile name (string) from browsers.yaml 
+                  (e.g., 'chrome_127', 'firefox_latest')
+                - Browser profile dictionary with keys:
+                  - name: Profile name
+                  - browserName: Type (chromium, firefox, webkit)
+                  - browserVersion: Version string
+                  - headless: Boolean
+                  - viewport: Dict with width/height
+                  - args: List of browser args
+                  - Other Playwright options
+                If None, uses default browser from config.
             remote: Whether to use remote execution (Grid/Moon)
         """
         self.config_loader = ConfigLoader()
-        self.browser_name = browser_name or self.config_loader.get_default_browser()
         self.remote = remote
         
-        # Load configurations
-        self.browser_config = self._load_browser_config()
+        # Load framework config
         self.framework_config = self.config_loader.get_all('config')
+        
+        # Handle browser_profile parameter
+        if browser_profile is None:
+            # Use default browser from config
+            default_browser = self.config_loader.get_default_browser()
+            self.browser_profile = self._load_browser_profile_by_name(default_browser)
+            self.profile_name = default_browser
+        elif isinstance(browser_profile, str):
+            # Load profile by name from browsers.yaml
+            self.browser_profile = self._load_browser_profile_by_name(browser_profile)
+            self.profile_name = browser_profile
+        elif isinstance(browser_profile, dict):
+            # Use provided dictionary as profile
+            self.browser_profile = browser_profile
+            self.profile_name = browser_profile.get('name', 'custom_profile')
+        else:
+            raise TypeError(
+                f"browser_profile must be None, str, or dict, got {type(browser_profile)}"
+            )
         
         # Playwright objects
         self._playwright: Optional[Playwright] = None
@@ -49,36 +79,42 @@ class DriverFactory:
         self._page: Optional[Page] = None
         
         logger.info(
-            f"DriverFactory initialized - Browser: {self.browser_name}, "
+            f"DriverFactory initialized - Profile: {self.profile_name}, "
+            f"Browser: {self.browser_profile.get('browserName', 'unknown')}, "
             f"Remote: {self.remote}"
         )
     
-    def _load_browser_config(self) -> Dict[str, Any]:
+    def _load_browser_profile_by_name(self, browser_name: str) -> Dict[str, Any]:
         """
-        Load browser configuration from browsers.yaml.
+        Load browser profile from browsers.yaml by name.
         
+        Args:
+            browser_name: Name of the browser profile
+            
         Returns:
-            Dictionary containing browser configuration
+            Browser profile dictionary
             
         Raises:
             ValueError: If browser profile is not found
         """
         try:
-            config = self.config_loader.get_browser_config(self.browser_name)
-            logger.debug(f"Loaded configuration for browser: {self.browser_name}")
-            return config
+            config = self.config_loader.get_browser_config(browser_name)
+            profile = {"name": browser_name}
+            profile.update(config)
+            logger.debug(f"Loaded browser profile: {browser_name}")
+            return profile
         except ValueError as e:
-            logger.error(f"Failed to load browser config: {e}")
+            logger.error(f"Failed to load browser profile: {e}")
             raise
     
     def _get_browser_type_name(self) -> str:
         """
-        Get the Playwright browser type name from config.
+        Get the Playwright browser type name from profile.
         
         Returns:
             Browser type name (chromium, firefox, webkit)
         """
-        browser_name = self.browser_config.get('browserName', 'chromium')
+        browser_name = self.browser_profile.get('browserName', 'chromium')
         
         # Map browser names to Playwright browser types
         browser_type_map = {
@@ -97,7 +133,7 @@ class DriverFactory:
     
     def _get_launch_options(self) -> Dict[str, Any]:
         """
-        Build launch options for browser from configuration.
+        Build launch options for browser from profile.
         
         Returns:
             Dictionary of browser launch options
@@ -105,14 +141,14 @@ class DriverFactory:
         options = {}
         
         # Headless mode
-        headless = self.browser_config.get(
+        headless = self.browser_profile.get(
             'headless',
             self.framework_config.get('headless', False)
         )
         options['headless'] = headless
         
         # Browser arguments
-        args = self.browser_config.get('args', [])
+        args = self.browser_profile.get('args', [])
         if args:
             options['args'] = args
         
@@ -124,7 +160,7 @@ class DriverFactory:
         # Channel for chromium-based browsers
         browser_type_name = self._get_browser_type_name()
         if browser_type_name == 'chromium':
-            browser_name = self.browser_config.get('browserName', '').lower()
+            browser_name = self.browser_profile.get('browserName', '').lower()
             if browser_name in ['chrome', 'msedge', 'edge']:
                 options['channel'] = browser_name if browser_name != 'edge' else 'msedge'
         
@@ -133,7 +169,7 @@ class DriverFactory:
     
     def _get_context_options(self) -> Dict[str, Any]:
         """
-        Build context options from configuration.
+        Build context options from profile.
         
         Returns:
             Dictionary of browser context options
@@ -141,7 +177,7 @@ class DriverFactory:
         options = {}
         
         # Viewport size
-        viewport = self.browser_config.get('viewport')
+        viewport = self.browser_profile.get('viewport')
         if viewport:
             options['viewport'] = {
                 'width': viewport.get('width', 1920),

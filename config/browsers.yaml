@@ -1,6 +1,48 @@
 # Browser Configuration Matrix
 # Define different browser profiles for parallel test execution
 
+# Browser matrix: ordered list of browser profiles to run tests on
+# Each entry represents one execution profile
+# The matrix is used at collection time to parametrize tests dynamically
+matrix:
+  - name: chrome_127
+    browserName: "chromium"
+    browserVersion: "127.0"
+    platformName: "linux"
+    headless: false
+    viewport:
+      width: 1920
+      height: 1080
+    args:
+      - "--start-maximized"
+      - "--disable-blink-features=AutomationControlled"
+
+  - name: chrome_latest
+    browserName: "chromium"
+    browserVersion: "latest"
+    platformName: "linux"
+    headless: false
+    viewport:
+      width: 1920
+      height: 1080
+    args:
+      - "--start-maximized"
+      - "--disable-blink-features=AutomationControlled"
+
+  - name: firefox_latest
+    browserName: "firefox"
+    browserVersion: "latest"
+    platformName: "linux"
+    headless: false
+    viewport:
+      width: 1920
+      height: 1080
+    preferences:
+      "dom.webdriver.enabled": false
+      "useAutomationExtension": false
+
+# Legacy browsers section: individual browser profiles
+# Kept for backward compatibility and reference
 browsers:
   # Chrome profiles
   chrome_127:

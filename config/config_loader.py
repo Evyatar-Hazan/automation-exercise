@@ -227,6 +227,78 @@ class ConfigLoader:
             Name of the default browser profile
         """
         return self.get("default_browser", "browsers", default="chrome_127")
+    
+    def get_browser_matrix(self) -> list[Dict[str, Any]]:
+        """
+        Get the browser matrix configuration.
+        
+        Returns:
+            List of browser profile dictionaries from the matrix section
+            
+        Raises:
+            ValueError: If matrix is not properly configured
+        """
+        try:
+            browsers_config = self.load_config("browsers")
+            
+            # Check if matrix section exists
+            if "matrix" not in browsers_config:
+                logger.warning(
+                    "No 'matrix' section found in browsers.yaml. "
+                    "Falling back to legacy browsers section."
+                )
+                # Fallback: return list of legacy browser profiles
+                return self._get_legacy_browser_matrix(browsers_config)
+            
+            matrix = browsers_config["matrix"]
+            
+            if not isinstance(matrix, list) or len(matrix) == 0:
+                logger.error("Browser matrix must be a non-empty list")
+                raise ValueError("Browser matrix must be a non-empty list")
+            
+            logger.info(f"Loaded browser matrix with {len(matrix)} profiles")
+            return matrix
+        
+        except Exception as e:
+            logger.error(f"Failed to load browser matrix: {e}")
+            raise
+    
+    def _get_legacy_browser_matrix(self, browsers_config: Dict[str, Any]) -> list[Dict[str, Any]]:
+        """
+        Convert legacy browsers section to matrix format for backward compatibility.
+        
+        Args:
+            browsers_config: The loaded browsers configuration
+            
+        Returns:
+            List of browser profiles in matrix format
+            
+        Raises:
+            ValueError: If browsers section is not properly configured
+        """
+        if "browsers" not in browsers_config:
+            logger.error(
+                "'matrix' not found and 'browsers' section is also missing "
+                "from browsers.yaml"
+            )
+            raise ValueError("Invalid browsers configuration: missing both 'matrix' and 'browsers'")
+        
+        browser_profiles = browsers_config["browsers"]
+        if not isinstance(browser_profiles, dict) or len(browser_profiles) == 0:
+            logger.error("Legacy 'browsers' section must be a non-empty dictionary")
+            raise ValueError("Invalid legacy browsers configuration")
+        
+        # Convert dict of profiles to list format for backward compatibility
+        matrix = []
+        for profile_name, profile_config in browser_profiles.items():
+            profile_entry = {"name": profile_name}
+            profile_entry.update(profile_config)
+            matrix.append(profile_entry)
+        
+        logger.info(
+            f"Converted {len(matrix)} legacy browser profiles to matrix format"
+        )
+        return matrix
 
 
 # Singleton instance for global access

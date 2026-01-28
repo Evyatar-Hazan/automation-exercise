@@ -1,13 +1,27 @@
 """
-Sample test demonstrating the usage of BaseTest and DriverFactory.
+Sample test demonstrating the usage of BaseTest and the browser matrix.
 
-This is a demonstration test that shows how to use the core framework components.
-Actual test cases should be implemented in separate test files.
+This is a demonstration test that shows how to use the core framework components
+with the dynamic browser matrix feature.
+
+The browser matrix is defined in config/browsers.yaml and is automatically applied
+to all tests. Each test function will run once per browser profile in the matrix.
+
+Example test execution with browser matrix:
+  test_driver_initialization[chrome_127]
+  test_driver_initialization[chrome_latest]
+  test_driver_initialization[firefox_latest]
+  test_page_elements[chrome_127]
+  test_page_elements[chrome_latest]
+  test_page_elements[firefox_latest]
+
+To run with a specific browser:
+  pytest --browser=chrome_127
 """
 
 import pytest
 from core.base_test import BaseTest
-from config.config_loader import ConfigLoader  # Only for standalone functions
+from config.config_loader import ConfigLoader
 
 
 class TestCoreFramework(BaseTest):
@@ -15,6 +29,9 @@ class TestCoreFramework(BaseTest):
     Sample test class demonstrating the core framework functionality.
     
     All test classes should inherit from BaseTest and use the 'driver' fixture.
+    
+    The browser matrix is automatically applied - each test will run on all
+    browsers defined in browsers.yaml:matrix.
     """
     
     def test_driver_initialization(self, driver):
@@ -25,8 +42,10 @@ class TestCoreFramework(BaseTest):
         - Driver is created successfully
         - Page navigation works
         - Basic page operations are functional
+        
+        This test will run automatically on all browsers in the matrix.
         """
-        # Get base_url from config.yaml (inherited from BaseTest)
+        # Get base_url from config.yaml
         base_url = self.config_loader.get('base_url')
         
         # Navigate using URL from config
@@ -43,23 +62,12 @@ class TestCoreFramework(BaseTest):
         assert heading.is_visible()
         assert "Featured" in heading.text_content() or "Latest" in heading.text_content()
     
-    @pytest.mark.browser("firefox_latest")
-    def test_with_firefox(self, driver):
-        """
-        Test using Firefox browser.
-        
-        Demonstrates how to use pytest markers to specify browser.
-        """
-        base_url = self.config_loader.get('base_url')
-        
-        driver.goto(base_url)
-        assert "practice your automation skills" in driver.title()
-    
     def test_page_elements(self, driver):
         """
         Test page element interactions.
         
         Demonstrates basic element operations.
+        This test will run on all browsers in the matrix.
         """
         base_url = self.config_loader.get('base_url')
         
@@ -86,34 +94,14 @@ class TestCoreFramework(BaseTest):
         assert driver.title() == "This Will Fail"
 
 
-class TestMultipleBrowsers(BaseTest):
-    """
-    Demonstrate testing with multiple browsers.
-    """
-    
-    @pytest.mark.browser("chrome_127")
-    def test_chrome(self, driver):
-        """Test with Chrome browser."""
-        base_url = self.config_loader.get('base_url')
-        
-        driver.goto(base_url)
-        assert driver.title()
-    
-    @pytest.mark.browser("firefox_latest")
-    def test_firefox(self, driver):
-        """Test with Firefox browser."""
-        base_url = self.config_loader.get('base_url')
-        
-        driver.goto(base_url)
-        assert driver.title()
-
-
 # Standalone test function (not in a class)
 def test_standalone():
     """
     Standalone test function demonstrating fixture usage without class.
     
-    Note: This test uses ConfigLoader directly since it's not in a class.
+    Note: This test does NOT use the driver fixture, so it won't be
+    parametrized with the browser matrix. It just demonstrates that
+    non-browser tests are unaffected.
     """
     config_loader = ConfigLoader()
     base_url = config_loader.get('base_url')
@@ -123,26 +111,21 @@ def test_standalone():
     assert "automationteststore" in base_url
 
 
-# Parameterized test
-@pytest.mark.parametrize("url,expected_title", [
-    ("https://automationteststore.com/", "practice your automation skills"),
-    ("https://www.iana.org/", "Internet Assigned Numbers Authority"),
-])
-def test_multiple_sites(url, expected_title):
-    """
-    Parameterized test demonstrating testing multiple sites.
-    
-    Args:
-        url: URL to test
-        expected_title: Expected page title
-    """
-    # This test uses ConfigLoader to get browser config for multi-site testing
-    config_loader = ConfigLoader()
-    factory = __import__('core.driver_factory', fromlist=['DriverFactory']).DriverFactory()
-    driver = factory.get_driver()
-    
-    try:
-        driver.goto(url)
-        assert expected_title in driver.title()
-    finally:
-        factory.quit_driver()
+# Note on old patterns:
+# 
+# The old pattern of using @pytest.mark.browser("firefox_latest") is NO LONGER NEEDED.
+# Instead, the browser matrix is automatically applied to all tests that request the
+# 'driver' fixture.
+#
+# Old way (NO LONGER RECOMMENDED):
+#   @pytest.mark.browser("firefox_latest")
+#   def test_something(self, driver):
+#       ...
+#
+# New way (AUTOMATIC):
+#   def test_something(self, driver):
+#       # Runs automatically on: chrome_127, chrome_latest, firefox_latest, ...
+#       ...
+#
+# To override the matrix for a single run:
+#   pytest --browser=chrome_127 tests/
