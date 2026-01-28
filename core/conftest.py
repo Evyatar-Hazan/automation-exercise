@@ -165,15 +165,17 @@ def browser_profile(request) -> Dict[str, Any]:
 
 
 @pytest.fixture(scope="function")
-def driver(browser_profile: Dict[str, Any]) -> Generator[Page, None, None]:
+def driver(browser_profile: Dict[str, Any], request) -> Generator[Page, None, None]:
     """
     Function-scoped fixture providing fresh Playwright Page instance.
     
     This fixture:
     - Receives a browser_profile from pytest_generate_tests parametrization
+    - Detects remote execution from markers (@pytest.mark.remote) or CLI flags (--remote)
     - Creates a new isolated browser session for each test
     - Handles cleanup and failure screenshot capture
     - Ensures no browser state is shared between tests
+    - Integrates with ReportingManager for logging remote sessions
     """
     logger.info("=" * 70)
     logger.info(f"Setup: {browser_profile.get('name', 'unknown')}")
@@ -181,9 +183,20 @@ def driver(browser_profile: Dict[str, Any]) -> Generator[Page, None, None]:
     factory = None
     page_instance = None
     
+    # Determine if test should run remote
+    remote = _should_run_remote(request, browser_profile)
+    remote_url = _get_remote_url(request, browser_profile)
+    
+    if remote:
+        logger.info(f"Remote execution: {remote_url}")
+    
     try:
-        # Create driver with the current browser profile
-        factory = DriverFactory(browser_profile=browser_profile, remote=False)
+        # Create driver with the current browser profile and remote settings
+        factory = DriverFactory(
+            browser_profile=browser_profile,
+            remote=remote,
+            remote_url=remote_url
+        )
         page_instance = factory.get_driver()
         logger.info(f"✓ Driver ready: {browser_profile.get('name', 'unknown')}")
         
@@ -206,6 +219,77 @@ def driver(browser_profile: Dict[str, Any]) -> Generator[Page, None, None]:
             except Exception as e:
                 logger.error(f"Cleanup error: {e}")
         logger.info("=" * 70)
+
+
+def _should_run_remote(request: Any, browser_profile: Dict[str, Any]) -> bool:
+    """
+    Determine if test should run remote based on:
+    1. CLI --remote flag
+    2. @pytest.mark.remote marker
+    3. browser_profile remote setting
+    
+    Priority: CLI > Marker > Profile
+    """
+    # Check CLI flag first (highest priority)
+    if request.config.getoption("--remote"):
+        logger.debug("Remote execution enabled via --remote CLI flag")
+        return True
+    
+    # Check for @pytest.mark.remote marker
+    if request.node.get_closest_marker('remote'):
+        logger.debug("Remote execution enabled via @pytest.mark.remote marker")
+        return True
+    
+    # Check browser profile remote setting (lowest priority)
+    profile_remote = browser_profile.get('remote', False)
+    if profile_remote:
+        logger.debug("Remote execution enabled via browser profile")
+        return True
+    
+    return False
+
+
+def _get_remote_url(request: Any, browser_profile: Dict[str, Any]) -> Optional[str]:
+    """
+    Get remote URL from multiple sources in priority order:
+    1. CLI --remote-url flag
+    2. @pytest.mark.remote marker with URL
+    3. browser_profile remote_url
+    4. Framework config
+    """
+    # Check CLI flag first
+    remote_url_cli = request.config.getoption("--remote-url", default=None)
+    if remote_url_cli:
+        logger.debug(f"Using remote URL from CLI: {remote_url_cli}")
+        return remote_url_cli
+    
+    # Check marker for remote URL specification
+    # @pytest.mark.remote or @pytest.mark.remote("https://moon.example.com/wd/hub")
+    marker = request.node.get_closest_marker('remote')
+    if marker and marker.args and len(marker.args) > 0:
+        remote_url_marker = marker.args[0]
+        logger.debug(f"Using remote URL from marker: {remote_url_marker}")
+        return remote_url_marker
+    
+    # Check browser profile
+    profile_url = browser_profile.get('remote_url')
+    if profile_url:
+        logger.debug(f"Using remote URL from browser profile: {profile_url}")
+        return profile_url
+    
+    # Check framework config
+    try:
+        config_loader = ConfigLoader()
+        framework_config = config_loader.get_all('config')
+        config_url = framework_config.get('remote_url')
+        if config_url:
+            logger.debug(f"Using remote URL from config: {config_url}")
+            return config_url
+    except Exception:
+        pass
+    
+    logger.debug("No remote URL found")
+    return None
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -246,7 +330,15 @@ def pytest_addoption(parser):
         "--remote",
         action="store_true",
         default=False,
-        help="Run tests on remote Selenium Grid/Moon (not yet implemented)"
+        help="Run tests on remote Playwright Grid/Moon instead of local execution"
+    )
+    parser.addoption(
+        "--remote-url",
+        action="store",
+        default=None,
+        help="URL of remote Playwright Grid/Moon service "
+             "(e.g., https://moon.example.com/wd/hub). "
+             "Only used if --remote flag is set."
     )
 
 

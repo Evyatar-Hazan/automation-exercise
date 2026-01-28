@@ -16,6 +16,9 @@ matrix:
     args:
       - "--start-maximized"
       - "--disable-blink-features=AutomationControlled"
+    # Remote execution settings (optional)
+    remote: false
+    remote_url: null
 
   - name: chrome_latest
     browserName: "chromium"
@@ -28,6 +31,8 @@ matrix:
     args:
       - "--start-maximized"
       - "--disable-blink-features=AutomationControlled"
+    remote: false
+    remote_url: null
 
   - name: firefox_latest
     browserName: "firefox"
@@ -40,49 +45,10 @@ matrix:
     preferences:
       "dom.webdriver.enabled": false
       "useAutomationExtension": false
-
-# Legacy browsers section: individual browser profiles
-# Kept for backward compatibility and reference
-browsers:
-  # Chrome profiles
-  chrome_127:
-    browserName: "chromium"
-    browserVersion: "127.0"
-    platformName: "linux"
-    headless: false
-    viewport:
-      width: 1920
-      height: 1080
-    args:
-      - "--start-maximized"
-      - "--disable-blink-features=AutomationControlled"
-    
-  chrome_latest:
-    browserName: "chromium"
-    browserVersion: "latest"
-    platformName: "linux"
-    headless: false
-    viewport:
-      width: 1920
-      height: 1080
-    args:
-      - "--start-maximized"
-      - "--disable-blink-features=AutomationControlled"
-
-  # Firefox profiles
-  firefox_latest:
-    browserName: "firefox"
-    browserVersion: "latest"
-    platformName: "linux"
-    headless: false
-    viewport:
-      width: 1920
-      height: 1080
-    preferences:
-      "dom.webdriver.enabled": false
-      "useAutomationExtension": false
-
-  firefox_esr:
+    remote: false
+    remote_url: null
+  
+  - name: firefox_esr
     browserName: "firefox"
     browserVersion: "115.0"
     platformName: "linux"
@@ -93,9 +59,10 @@ browsers:
     preferences:
       "dom.webdriver.enabled": false
       "useAutomationExtension": false
+    remote: false
+    remote_url: null
 
-  # Edge profiles
-  edge_latest:
+  - name: edge_latest
     browserName: "msedge"
     browserVersion: "latest"
     platformName: "windows"
@@ -105,9 +72,10 @@ browsers:
       height: 1080
     args:
       - "--start-maximized"
+    remote: false
+    remote_url: null
 
-  # WebKit/Safari
-  webkit_latest:
+  - name: webkit_latest
     browserName: "webkit"
     browserVersion: "latest"
     platformName: "mac"
@@ -115,6 +83,8 @@ browsers:
     viewport:
       width: 1920
       height: 1080
+    remote: false
+    remote_url: null
 
 # Default browser to use if not specified
 default_browser: "chrome_127"

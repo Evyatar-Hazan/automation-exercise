@@ -110,3 +110,35 @@ class ReportingManager:
             True if initialized, False otherwise
         """
         return cls._instance is not None
+    
+    @classmethod
+    def log_info(cls, message: str) -> None:
+        """
+        Log informational message to report.
+        
+        Safe to call even if reporter not initialized.
+        
+        Args:
+            message: Information message to log
+        """
+        try:
+            if cls.is_initialized():
+                cls.reporter().log_step(message)
+        except Exception:
+            logger.debug(f"Could not log to reporter: {message}")
+    
+    @classmethod
+    def attach_remote_capabilities(cls, capabilities: dict) -> None:
+        """
+        Attach remote execution capabilities to report.
+        
+        Args:
+            capabilities: Dictionary of remote execution capabilities
+        """
+        try:
+            if cls.is_initialized():
+                import json
+                cap_text = json.dumps(capabilities, indent=2)
+                cls.reporter().attach_text("Remote Capabilities", cap_text)
+        except Exception as e:
+            logger.debug(f"Could not attach remote capabilities: {e}")

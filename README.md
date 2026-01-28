@@ -121,6 +121,95 @@ pytest --browser=firefox_latest
 pytest -k test_with_firefox
 ```
 
+### Remote Execution (Playwright Grid / Moon)
+
+The framework supports remote browser execution via Playwright Grid or Moon. This allows you to run tests on remote browsers instead of local installations.
+
+#### Setup Remote Execution
+
+1. **Install and start a Playwright Grid or Moon service:**
+   ```bash
+   # Moon (Aerokube): https://aerokube.com/moon/
+   # Playwright Grid: https://playwright.dev/docs/api/class-playwrighttesting
+   ```
+
+2. **Configure remote browser profile in config/browsers.yaml** (optional):
+   ```yaml
+   matrix:
+     - name: chrome_127_remote
+       browserName: "chromium"
+       browserVersion: "127.0"
+       headless: false
+       viewport:
+         width: 1920
+         height: 1080
+       remote: true
+       remote_url: "https://moon.example.com/wd/hub"
+   ```
+
+3. **Run tests remotely:**
+
+   **Option A: Using CLI flags (all tests, all browsers)**
+   ```bash
+   pytest --remote --remote-url=https://moon.example.com/wd/hub
+   ```
+
+   **Option B: Using pytest markers (specific tests)**
+   ```python
+   @pytest.mark.remote
+   def test_something(driver):
+       page = LoginPage(driver)
+       page.login("user", "pass")
+   ```
+   ```bash
+   pytest --remote-url=https://moon.example.com/wd/hub
+   ```
+
+   **Option C: Using markers with URL (self-contained)**
+   ```python
+   @pytest.mark.remote("https://moon.example.com/wd/hub")
+   def test_something(driver):
+       pass
+   ```
+   ```bash
+   pytest tests/test_file.py
+   ```
+
+   **Option D: Using browser profile (static config)**
+   ```bash
+   pytest --browser=chrome_127_remote
+   ```
+
+4. **Verify remote execution:**
+   - Look for logs: `"Remote execution enabled via"`
+   - Check reports: Remote capabilities should be attached to Allure
+   - Session info includes remote URL and browser details
+
+#### Remote Execution Features
+
+- **Seamless integration**: Test code remains unchanged (transparent local/remote)
+- **Automatic capabilities mapping**: Browser profiles → remote capabilities
+- **Full isolation**: Each test gets its own remote session
+- **Error handling**: Connection failures logged and integrated with reporting
+- **Parallel execution**: Compatible with pytest-xdist for parallel remote tests
+- **Screenshot support**: Screenshots work identically to local execution
+- **Reporting**: Remote session info automatically included in Allure reports
+
+#### Example: Running Tests Remotely with Parallel Execution
+
+```bash
+# Run all tests on remote Grid with 4 parallel workers
+pytest --remote --remote-url=https://moon.example.com/wd/hub -n 4
+
+# Run specific browser profile on remote Grid
+pytest --browser=chrome_127_remote -n auto
+
+# Run marked tests on remote Grid in parallel
+pytest -m remote -n 4 --remote-url=https://moon.example.com/wd/hub
+```
+
+See [tests/test_remote_execution.py](tests/test_remote_execution.py) for comprehensive remote execution examples.
+
 ### Validate Configuration
 
 ```bash
@@ -253,30 +342,35 @@ allure serve reports/allure-results
 ## Core Components
 
 ### DriverFactory
-- Creates Playwright browser instances
-- Supports local and remote execution
+- Creates Playwright browser instances (local and remote)
+- Supports **remote execution** via Playwright Grid / Moon
 - Reads browser profiles from `config/browsers.yaml`
+- Maps browser profiles to remote capabilities automatically
 - Implements retry mechanism for reliability
 - Provides isolated sessions per test
 - Comprehensive logging and error handling
+- Remote capabilities mapper for Grid/Moon compatibility
 
 ### BaseTest
 - Base class for all test classes
-- Provides `driver` fixture for tests
+- Provides `driver` fixture for tests (local or remote)
 - Automatic setup and teardown
 - Screenshot capture on test failure
 - Support for parallel execution (pytest-xdist)
 - Browser selection via pytest markers
+- Remote execution detection (markers, CLI, config)
 - Proper resource cleanup
 
 ### Key Features
-- **Isolation**: Each test gets its own browser instance
-- **Configuration-driven**: All settings in YAML files
+- **Isolation**: Each test gets its own browser instance (local or remote)
+- **Configuration-driven**: All settings in YAML files (including remote config)
 - **Retry mechanism**: Automatic retry on driver creation failure
 - **Screenshot on failure**: Automatic screenshot when tests fail
-- **Parallel execution**: Full support for pytest-xdist
+- **Parallel execution**: Full support for pytest-xdist (works with remote)
 - **Logging**: Comprehensive logging with loguru
 - **Flexibility**: Easy to extend and customize
+- **Remote execution**: Seamless local-to-remote switching without code changes
+- **Pytest markers**: `@pytest.mark.remote` for test-level remote execution control
 
 ## Project Status
 
@@ -302,6 +396,18 @@ allure serve reports/allure-results
   - Parallel execution support (pytest-xdist)
   - Isolated browser sessions per test
   - Sample demo tests
+
+- **STEP 2b**: Remote Execution (Playwright Grid / Moon)
+  - **Remote capabilities mapper** - Maps browser profiles to Grid capabilities
+  - **DriverFactory enhancements** - Support for remote=True, remote_url parameters
+  - **CDP connection** - Playwright's connect_over_cdp() for Grid integration
+  - **Pytest integration** - Markers (@pytest.mark.remote) and CLI flags (--remote, --remote-url)
+  - **Fixture enhancement** - Dynamic remote/local detection per test
+  - **Reporting integration** - Remote session info logged to Allure
+  - **Error handling** - Grid connection failures properly handled and logged
+  - **Parallel compatibility** - Full pytest-xdist support for remote tests
+  - **Configuration** - Extended browsers.yaml with remote: true/false and remote_url
+  - **Documentation** - Comprehensive examples and usage guide
 
 ### 🔄 Next Steps
 
