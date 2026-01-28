@@ -20,6 +20,7 @@ class BasePage:
     All page objects should inherit from this class.
     """
     
+    
     def __init__(self, page: Page):
         """
         Initialize BasePage.
@@ -95,6 +96,41 @@ class BasePage:
             )
         """
         self.locator_util.type_text(locators, text, element_name, clear_first)
+
+    def select(
+        self,
+        locators: List[Dict[str, str]],
+        value: str,
+        element_name: str = "Element"
+    ) -> None:
+        """
+        Select option in a <select> element using multi-locator fallback.
+        
+        Args:
+            locators: List of locator dictionaries
+            value: The value (or visible text) to select
+            element_name: Name of element for logging
+        
+        Usage:
+            self.select(
+                [
+                    {'type': 'css', 'value': '#country'},
+                    {'type': 'xpath', 'value': '//select[@name="country"]'}
+                ],
+                value="Israel",
+                element_name="Country Dropdown"
+            )
+        """
+        element = self.locator_util.find_element(locators, element_name)
+        try:
+            # Try by value first
+            element.select_option(value=value)
+            logger.info(f"{element_name}: ✓ Selected option by value '{value}'")
+        except Exception as e:
+            logger.debug(f"{element_name}: Failed to select by value '{value}' ({e}), trying by label")
+            # Try by label/text if value fails
+            element.select_option(label=value)
+            logger.info(f"{element_name}: ✓ Selected option by label '{value}'")
     
     def get_text(
         self,

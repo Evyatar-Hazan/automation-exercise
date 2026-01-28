@@ -274,7 +274,7 @@ Complete end-to-end test combining multiple patterns.
 """
 
 from pages.login_page import LoginPage
-from pages.product_page import ProductPage
+from pages.products_page import ProductPage
 from pages.checkout_page import CheckoutPage
 from core.base_test import BaseTest
 
