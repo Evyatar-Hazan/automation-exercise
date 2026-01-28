@@ -1,0 +1,26 @@
+# Sample Login Test Data
+# Used by test_data_driven_login.py for parametrized testing
+# 
+# Format: YAML with 'tests' root key containing list of login scenarios
+# Each test case is a dict with username and password
+
+tests:
+  - username: user1@example.com
+    password: password123
+    expected_role: customer
+
+  - username: user2@example.com
+    password: password456
+    expected_role: admin
+
+  - username: standard_user
+    password: secret_password
+    expected_role: customer
+
+  - username: locked_out_user
+    password: wrong_password
+    expected_role: null
+
+  - username: test.user@example.com
+    password: Test@1234!
+    expected_role: customer

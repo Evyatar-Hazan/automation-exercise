@@ -3,13 +3,14 @@
 ## Table of Contents
 1. [Project Structure](#project-structure)
 2. [Framework Components](#framework-components)
-3. [Step 6: Dynamic Browser Matrix](#step-6-dynamic-browser-matrix) ⭐ NEW
-4. [Step 5: Reporting System](#step-5-reporting-system)
-5. [Step 4: Locator Strategy](#step-4-locator-strategy)
-6. [Step 3: BaseTest + Fixtures](#step-3-basetest--fixtures)
-7. [Configuration System](#configuration-system)
-8. [Running Tests](#running-tests)
-9. [Features Summary](#features-summary)
+3. [Step 7: Data-Driven Testing](#step-7-data-driven-testing) ⭐ NEW
+4. [Step 6: Dynamic Browser Matrix](#step-6-dynamic-browser-matrix)
+5. [Step 5: Reporting System](#step-5-reporting-system)
+6. [Step 4: Locator Strategy](#step-4-locator-strategy)
+7. [Step 3: BaseTest + Fixtures](#step-3-basetest--fixtures)
+8. [Configuration System](#configuration-system)
+9. [Running Tests](#running-tests)
+10. [Features Summary](#features-summary)
 
 ---
 
@@ -74,6 +75,15 @@ automation-exercise/
 │   └── ... (more runs)
 │
 ├── utils/
+│   ├── __init__.py
+│   └── data_loader.py                   # Data-Driven Testing module
+│
+├── test_data/                            # 🆕 NEW: Test data files
+│   ├── login.yaml                        # Login credentials (YAML)
+│   ├── search.json                       # Search queries (JSON)
+│   ├── users.csv                         # User records (CSV)
+│   └── product_filters.yaml              # Filter configurations (YAML)
+│
 ├── __pycache__/
 └── requirements.txt
 ```
@@ -82,7 +92,180 @@ automation-exercise/
 
 ## Framework Components
 
-### 0. Dynamic Browser Matrix (Step 6) ⭐ NEW
+### 0. Data-Driven Testing (Step 7) ⭐ NEW
+
+#### Overview
+Data-Driven Testing layer enables loading test inputs from external files (YAML, JSON, CSV) and running multiple test scenarios through pytest parametrization. Test data is completely separated from test logic.
+
+#### Architecture
+
+**Data Flow:**
+```
+Test Data File (YAML/JSON/CSV)
+    ↓
+load_test_data(path)
+    ↓
+DataLoader (auto-detect format)
+    ↓
+Normalize → List[Dict[str, Any]]
+    ↓
+@pytest.mark.parametrize
+    ↓
+Multiple test executions (one per data row)
+```
+
+#### Core Components
+
+**DataLoader** (`utils/data_loader.py`)
+- Auto-detects file format by extension (`.yaml`, `.yml`, `.json`, `.csv`)
+- Normalizes all formats to `List[Dict[str, Any]]`
+- Supports root keys in YAML/JSON: `tests`, `data`, `cases`, `test_cases`, `rows`
+- Custom exception: `DataLoaderError` with clear messages
+
+```python
+from utils.data_loader import load_test_data
+
+# Load any format - same return type
+yaml_data = load_test_data("test_data/login.yaml")    # List[Dict]
+json_data = load_test_data("test_data/search.json")   # List[Dict]
+csv_data = load_test_data("test_data/users.csv")      # List[Dict]
+```
+
+**Supported Formats:**
+
+1. **YAML** (Preferred)
+```yaml
+tests:
+  - username: user1
+    password: pass1
+    expected_role: admin
+  - username: user2
+    password: pass2
+    expected_role: user
+```
+
+2. **JSON**
+```json
+{
+  "tests": [
+    { "username": "user1", "password": "pass1", "expected_role": "admin" },
+    { "username": "user2", "password": "pass2", "expected_role": "user" }
+  ]
+}
+```
+
+3. **CSV** (Headers → Dict Keys)
+```csv
+username,password,expected_role
+user1,pass1,admin
+user2,pass2,user
+```
+
+#### Integration with pytest
+
+**Direct Parametrization (Recommended):**
+```python
+from utils.data_loader import load_test_data
+import pytest
+
+class TestLoginDataDriven(BaseTest):
+    
+    @pytest.mark.parametrize(
+        "login_data",
+        load_test_data("test_data/login.yaml"),
+        ids=lambda d: d["username"]
+    )
+    def test_login(self, driver, login_data):
+        """Parametrized test runs for each data row"""
+        page = LoginPage(driver)
+        page.login(login_data["username"], login_data["password"])
+        
+        if login_data.get("expected_role"):
+            assert page.get_user_role() == login_data["expected_role"]
+```
+
+**Generated Test Variants:**
+```
+test_login[user1] [chrome_127] PASSED
+test_login[user1] [chrome_latest] PASSED
+test_login[user1] [firefox_latest] PASSED
+test_login[user2] [chrome_127] PASSED
+test_login[user2] [chrome_latest] PASSED
+test_login[user2] [firefox_latest] PASSED
+
+6 tests generated from 1 method × 2 data rows × 3 browsers
+```
+
+**Optional Fixture Wrapper:**
+```python
+@pytest.fixture(params=load_test_data("test_data/login.yaml"))
+def login_data(request):
+    return request.param
+
+def test_login_with_fixture(driver, login_data):
+    """Alternative pattern - useful for complex setup/teardown"""
+    page = LoginPage(driver)
+    page.login(login_data["username"], login_data["password"])
+```
+
+#### Error Handling
+
+Custom `DataLoaderError` exception with clear messages:
+
+```python
+from utils.data_loader import load_test_data, DataLoaderError
+
+try:
+    data = load_test_data("test_data/missing.yaml")
+except DataLoaderError as e:
+    # "Data file not found: /abs/path/test_data/missing.yaml"
+    # "Unsupported file format: .txt"
+    # "Empty dataset in login.yaml"
+    # "Invalid data structure in search.json"
+    print(f"Error: {e}")
+```
+
+#### Logging Integration
+
+All data loading is logged via loguru:
+- `DEBUG`: File loading start
+- `INFO`: Successful load with test case count
+- `WARNING`: Ambiguous data structure
+
+```
+[DEBUG] Loading test data from: test_data/login.yaml
+[INFO] Successfully loaded 5 test case(s) from login.yaml
+```
+
+#### Features
+
+✅ **Format Flexibility** - Switch YAML ↔ JSON ↔ CSV without changing tests  
+✅ **Automatic Root Key Detection** - Recognizes `tests`, `data`, `cases`, etc.  
+✅ **CSV Type Handling** - Headers converted to dict keys  
+✅ **pytest Integration** - Direct parametrization & custom IDs  
+✅ **Browser Matrix Support** - Combines with browser matrix automatically  
+✅ **Error Handling** - Clear validation and error messages  
+✅ **Logging** - Full integration with loguru  
+✅ **Backward Compatible** - Opt-in per test, no breaking changes  
+
+#### Sample Test Data Files
+
+- `test_data/login.yaml` - 5 login scenarios with roles
+- `test_data/search.json` - 4 search queries with expected result counts
+- `test_data/users.csv` - 5 user accounts with multiple fields
+- `test_data/product_filters.yaml` - 5 filter configurations
+
+#### Documentation
+
+See detailed documentation in:
+- [GETTING_STARTED_DATA_DRIVEN.md](GETTING_STARTED_DATA_DRIVEN.md) - 5-minute quick start
+- [DATA_DRIVEN_TESTING_QUICK_REF.md](DATA_DRIVEN_TESTING_QUICK_REF.md) - Quick reference
+- [DATA_DRIVEN_TESTING.md](DATA_DRIVEN_TESTING.md) - Complete guide (400+ lines)
+- [DATA_DRIVEN_EXAMPLES.py](DATA_DRIVEN_EXAMPLES.py) - 10 copy-paste code examples
+
+---
+
+### 1. Dynamic Browser Matrix (Step 6)
 
 #### Overview
 Fully dynamic browser matrix system that enables running the same tests across multiple browsers/versions without any test code changes. Tests are automatically parametrized at pytest collection time.
@@ -389,7 +572,7 @@ Cleanup (browser.close(), context.close())
 
 ---
 
-### 1. Reporting System (reporting/)
+### 2. Reporting System (reporting/)
 
 #### Overview
 Abstraction layer for test reporting that enables easy switching between Allure, Extent Reports, Report Portal, etc. without changing test code.
@@ -528,9 +711,9 @@ factory.quit_driver()
 
 ---
 
-## Step 4: Locator Strategy
+---
 
-### Overview
+### 3. Locator Strategy (core/locator_strategy.py)
 Multi-locator fallback system allowing each UI element to have multiple locators (XPath, CSS, etc.) that are tried sequentially.
 
 ### Components
@@ -615,7 +798,7 @@ page.enter_search_text("Hair Care")
 
 ---
 
-## Step 3: BaseTest + Fixtures
+## Step 4: BaseTest + Fixtures
 
 ### Architecture
 
@@ -682,6 +865,10 @@ class BaseTest:
 - Indicates test inherits from framework
 - Anchor point for future helper methods
 - Convention for test organization
+
+---
+
+## Step 3: BaseTest + Fixtures
 
 ---
 
@@ -861,7 +1048,22 @@ allure generate reports/run_20260128_154520/allure-results/ -o reports/allure-ht
 - ✅ Configuration-driven reporter type
 - ✅ Zero test changes when switching reporters
 
-#### Dynamic Browser Matrix ⭐ NEW (Step 6)
+#### Data-Driven Testing ⭐ NEW (Step 7)
+- ✅ YAML, JSON, CSV data file support
+- ✅ Auto-detect format by extension
+- ✅ Automatic root key detection (tests, data, cases, etc.)
+- ✅ Unified API: `load_test_data(path) -> List[Dict]`
+- ✅ pytest parametrization integration
+- ✅ Custom test ID generation
+- ✅ Optional fixture wrapper support
+- ✅ Clear error handling (DataLoaderError)
+- ✅ Full loguru logging integration
+- ✅ Zero test code changes for format switching
+- ✅ Scales from 1 to 1000+ datasets
+- ✅ Works seamlessly with browser matrix (data × browsers)
+- ✅ 100% backward compatible (opt-in per test)
+
+#### Dynamic Browser Matrix ⭐ (Step 6)
 - ✅ YAML-based matrix configuration (browsers.yaml:matrix)
 - ✅ Collection-time parametrization via pytest_generate_tests hook
 - ✅ Zero test code changes (same test runs on all browsers)

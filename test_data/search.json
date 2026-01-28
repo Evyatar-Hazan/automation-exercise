@@ -1,0 +1,24 @@
+{
+  "tests": [
+    {
+      "query": "laptop",
+      "min_results": 5,
+      "category": "electronics"
+    },
+    {
+      "query": "phone",
+      "min_results": 5,
+      "category": "electronics"
+    },
+    {
+      "query": "t-shirt",
+      "min_results": 3,
+      "category": "clothing"
+    },
+    {
+      "query": "shoes",
+      "min_results": 4,
+      "category": "footwear"
+    }
+  ]
+}

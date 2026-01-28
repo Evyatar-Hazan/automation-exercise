@@ -1,0 +1,25 @@
+# Sample Product Filter Test Data
+# Used for testing filtering and product discovery
+
+tests:
+  - filter_name: price_range
+    min_price: 10
+    max_price: 100
+    expected_count: 15
+
+  - filter_name: price_range
+    min_price: 100
+    max_price: 500
+    expected_count: 8
+
+  - filter_name: brand
+    brand: "Brand A"
+    expected_count: 5
+
+  - filter_name: category
+    category: "electronics"
+    expected_count: 12
+
+  - filter_name: rating
+    min_rating: 4.0
+    expected_count: 7

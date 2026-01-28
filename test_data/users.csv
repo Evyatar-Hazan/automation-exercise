@@ -1,0 +1,6 @@
+username,password,email,first_name,last_name,role
+john_doe,Pass@1234,john.doe@example.com,John,Doe,customer
+jane_smith,Secure#5678,jane.smith@example.com,Jane,Smith,admin
+bob_wilson,MyPassword99,bob.wilson@example.com,Bob,Wilson,customer
+alice_brown,BrownPass123!,alice.brown@example.com,Alice,Brown,moderator
+charlie_king,KingPass456#,charlie.king@example.com,Charlie,King,customer
