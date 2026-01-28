@@ -3,11 +3,12 @@
 ## Table of Contents
 1. [Project Structure](#project-structure)
 2. [Framework Components](#framework-components)
-3. [Step 4: Locator Strategy](#step-4-locator-strategy)
-4. [Step 3: BaseTest + Fixtures](#step-3-basetest--fixtures)
-5. [Configuration System](#configuration-system)
-6. [Running Tests](#running-tests)
-7. [Features Summary](#features-summary)
+3. [Step 5: Reporting System](#step-5-reporting-system) ⭐ NEW
+4. [Step 4: Locator Strategy](#step-4-locator-strategy)
+5. [Step 3: BaseTest + Fixtures](#step-3-basetest--fixtures)
+6. [Configuration System](#configuration-system)
+7. [Running Tests](#running-tests)
+8. [Features Summary](#features-summary)
 
 ---
 
@@ -39,6 +40,12 @@ automation-exercise/
 │   ├── locator_strategy.py              # Multi-locator fallback mechanism
 │   ├── LOCATOR_STRATEGY_README.md       # Detailed locator documentation
 │   └── README.md
+│
+├── reporting/                            # 🆕 NEW: Reporting abstraction layer
+│   ├── __init__.py
+│   ├── reporter.py                      # Abstract Reporter interface
+│   ├── allure_reporter.py               # Allure implementation
+│   └── manager.py                       # ReportingManager (facade/singleton)
 │
 ├── pages/
 │   ├── example_page.py                  # Example page object
@@ -73,6 +80,61 @@ automation-exercise/
 ---
 
 ## Framework Components
+
+### 0. Reporting System (reporting/) ⭐ NEW
+
+#### Overview
+Abstraction layer for test reporting that enables easy switching between Allure, Extent Reports, Report Portal, etc. without changing test code.
+
+#### Architecture
+
+**Reporter Interface** (`reporting/reporter.py`)
+- Abstract base class defining the contract for all reporters
+- Methods:
+  - `log_step(message: str)` - Log test steps
+  - `attach_screenshot(name: str, path: str)` - Attach images
+  - `attach_text(name: str, content: str)` - Attach text/logs
+  - `attach_exception(name: str, exception: Exception)` - Attach errors
+
+**AllureReporter** (`reporting/allure_reporter.py`)
+- Implements Reporter interface using Allure Python API
+- Only file containing direct Allure imports
+- Wraps Allure-specific logic cleanly
+
+**ReportingManager** (`reporting/manager.py`)
+- Facade providing single access point for reporters
+- Singleton pattern for safe initialization
+- Methods:
+  - `init(reporter_type: str)` - Initialize during pytest_configure
+  - `reporter() -> Reporter` - Get active reporter instance
+  - `is_initialized() -> bool` - Check initialization status
+  - `reset()` - Reset for testing/switching reporters
+
+#### Usage
+
+**In pytest hooks:**
+```python
+def pytest_configure(config):
+    from reporting.manager import ReportingManager
+    ReportingManager.init("allure")
+```
+
+**In tests/pages (optional custom reporting):**
+```python
+from reporting.manager import ReportingManager
+
+ReportingManager.reporter().log_step("Click login button")
+ReportingManager.reporter().attach_screenshot("Login page", "path/to/image.png")
+```
+
+#### Key Features
+- ✅ Allure working seamlessly now
+- ✅ Easy extension to other reporters (Extent, Report Portal)
+- ✅ Zero changes to tests when switching reporters
+- ✅ No Allure imports outside `reporting/` module
+- ✅ Configuration-driven reporter type
+
+---
 
 ### 1. Configuration System (config/)
 
@@ -404,10 +466,18 @@ allure generate reports/run_20260128_154520/allure-results/ -o reports/allure-ht
 
 #### Reporting & Logging
 - ✅ Per-run timestamped directories
-- ✅ Allure integration
+- ✅ Allure integration (via ReportingManager)
 - ✅ Screenshot capture on failure
 - ✅ Detailed pytest logging
 - ✅ Loguru integration
+- ✅ **NEW: Extensible ReportingManager (Allure, Extent, Report Portal ready)**
+
+#### Reporting Abstraction ⭐ NEW
+- ✅ Abstract Reporter interface
+- ✅ AllureReporter implementation
+- ✅ ReportingManager facade
+- ✅ Configuration-driven reporter type
+- ✅ Zero test changes when switching reporters
 
 #### Parallel Execution
 - ✅ pytest-xdist compatible
@@ -554,8 +624,10 @@ This framework provides:
 4. **Production-ready** - Logging, reporting, screenshots
 5. **Scalable** - Parallel execution support
 6. **Maintainable** - Configuration-driven, page object pattern
+7. **Extensible Reporting** ⭐ NEW - Easy switching between Allure, Extent, Report Portal without code changes
 
 **Total Components:**
+- ✅ 1 reporting abstraction module (Reporter, AllureReporter, ReportingManager)
 - ✅ 3 pytest fixtures
 - ✅ 4 pytest hooks
 - ✅ 2 page object examples

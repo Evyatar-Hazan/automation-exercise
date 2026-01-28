@@ -1,5 +1,8 @@
 # General Framework Configuration
 
+# Reporting settings
+reporter: "allure"  # Options: allure (Extent and Report Portal coming soon)
+
 # Application settings
 base_url: "https://automationteststore.com"
 

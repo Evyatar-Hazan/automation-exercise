@@ -16,6 +16,7 @@ from loguru import logger
 
 from core.driver_factory import DriverFactory
 from config.config_loader import ConfigLoader
+from reporting.manager import ReportingManager
 
 
 _REPORTS_RUN_DIR = None
@@ -43,6 +44,16 @@ def pytest_configure(config):
     allure_dir.mkdir(parents=True, exist_ok=True)
     
     config.option.allure_report_dir = str(allure_dir)
+    
+    # Initialize ReportingManager
+    try:
+        config_loader = ConfigLoader()
+        configuration = config_loader.load_config("config")
+        reporter_type = configuration.get("reporter", "allure")
+        ReportingManager.init(reporter_type)
+    except Exception as e:
+        logger.warning(f"Failed to initialize ReportingManager: {e}. Falling back to Allure.")
+        ReportingManager.init("allure")
     
     logger.info(f"Reports directory: {_REPORTS_RUN_DIR}")
 
@@ -178,16 +189,12 @@ def _capture_failure_screenshot(request, page_instance: Page) -> None:
         page_instance.screenshot(path=str(screenshot_path), full_page=True)
         logger.info(f"✓ Screenshot: {screenshot_path}")
         
-        try:
-            import allure
-            with open(screenshot_path, 'rb') as img:
-                allure.attach(
-                    img.read(),
-                    name=f"failure_{test_name}",
-                    attachment_type=allure.attachment_type.PNG
-                )
-        except ImportError:
-            pass
+        # Attach screenshot using ReportingManager
+        if ReportingManager.is_initialized():
+            ReportingManager.reporter().attach_screenshot(
+                name=f"failure_{test_name}",
+                path=str(screenshot_path)
+            )
     
     except Exception as e:
         logger.error(f"Failed to capture screenshot: {e}")
