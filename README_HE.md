@@ -2,6 +2,9 @@
 
 תשתית אוטומציה חזקה וסקיילבילית שנבנתה באמצעות **Python**, **Playwright**, ו-**Pytest**. תוכננה ליציבות, גמישות וקלות תחזוקה תוך שימוש בתבנית העיצוב Page Object Model (POM).
 
+> [!NOTE]
+> **סטטוס דרישות**: ✅ **100% בוצע**. פרויקט זה עומד בכל הדרישות שהוגדרו, כולל שימוש ב-Playwright, Python, דוחות Allure, תמיכה ב-Selenium Grid/Moon, תכנון OOP/POM, בדיקות מונחות נתונים (Data-Driven), והרצה מקבילית.
+
 ## 🚀 תכונות מרכזיות (Key Features)
 
 *   **טכנולוגיות מודרניות**: Python 3.10+, Playwright, Pytest.
@@ -18,19 +21,111 @@
 
 ```
 automation-exercise/
-├── config/                 # קבצי קונפיגורציה (config.yaml, browsers.yaml)
-├── core/                   # ליבת התשתית (DriverFactory, BasePage, BaseTest)
+├── config/                 # קבצי קונפיגורציה
+│   ├── config.yaml         # הגדרות ראשיות (Base URL, timeouts)
+│   ├── browsers.yaml       # הגדרת מטריצת דפדפנים
+│   └── reporting.yaml      # הגדרות דיווח
+├── core/                   # ליבת התשתית
+│   ├── driver_factory.py   # יצירת דפדפן וחיבור מרוחק
+│   ├── base_page.py        # מחלקת עמוד בסיסית (POM)
+│   └── locator_strategy.py # לוגיקת איתור חכמה (Fallback)
 ├── pages/                  # אובייקטי עמוד (POM)
 ├── tests/                  # סקריפטים של בדיקות
-├── test_data/              # קבצי נתונים לבדיקות (yaml, json, csv)
+├── test_data/              # קבצי נתונים לבדיקות
+│   ├── login.yaml          # דוגמאות YAML
+│   ├── users.csv           # דוגמאות CSV
+│   └── search.json         # דוגמאות JSON
 ├── utils/                  # כלי עזר (DataLoader, etc.)
-├── reporting/              # שכבת הדיווח
-├── reports/                # דוחות ריצה
+├── reporting/              # שכבת הדיווח (Abstraction Layer)
+├── reports/                # דוחות ריצה (עם חותמת זמן)
 ├── logs/                   # לוגים של הריצה
 ├── conftest.py             # Pytest fixtures and hooks
 ├── pytest.ini              # הגדרות Pytest
 └── requirements.txt        # תלויות הפרויקט
 ```
+
+## 🌐 מטריצת דפדפנים וארכיטקטורה (Browser Matrix)
+
+התשתית משתמשת ב-**מטריצת דפדפנים דינמית** המוגדרת בקובץ `config/browsers.yaml`. הבדיקות מתוזמנות אוטומטית (בזמן ה-Collection) לרוץ על כל הדפדפנים המוגדרים.
+
+### ארכיטקטורה
+```
+YAML Matrix (browsers.yaml) → pytest_generate_tests() → Test Parametrization → Isolated Drivers
+```
+
+### קונפיגורציה (`config/browsers.yaml`)
+```yaml
+matrix:
+  - name: chrome_latest
+    browserName: chromium
+    browserVersion: latest
+    headless: false
+
+  - name: firefox_latest
+    browserName: firefox
+    browserVersion: latest
+```
+
+## ☁️ הרצה מרוחקת (Remote Execution - Grid / Moon)
+
+הרץ בדיקות באופן שקוף על דפדפנים מקומיים או על Grid מרוחק (Selenium Grid 4, Moon, BrowserStack וכו').
+
+### ארכיטקטורה
+ה-`DriverFactory` ממפה אוטומטית את פרופילי הדפדפן ל-W3C Capabilities ומתחבר דרך CDP או WebDriver API.
+
+### אופן השימוש
+**שיטה 1: פרמטרים ב-CLI**
+```bash
+pytest --remote --remote-url="http://localhost:4444/wd/hub"
+```
+
+**שיטה 2: קונפיגורציה**
+הגדר `remote: true` בפרופילים הרצויים בקובץ `config/browsers.yaml`.
+
+### הקמת Docker (דוגמה)
+הרצת Moon (Selenium Grid קל משקל):
+```bash
+docker run -d -p 4444:4444 aerokube/moon:latest
+```
+
+## 💾 בדיקות מונחות נתונים (Data-Driven Testing)
+
+הפרדת לוגיקת הבדיקה מהנתונים. תמיכה ב-**YAML**, **JSON**, ו-**CSV**.
+
+### דוגמת שימוש
+```python
+from utils.data_loader import load_test_data
+
+@pytest.mark.parametrize("data", load_test_data("test_data/login.yaml"))
+def test_login(driver, data):
+    page.login(data["username"], data["password"])
+    assert page.is_logged_in()
+```
+
+### פורמטים נתמכים
+*   **YAML**: מומלץ לנתונים מובנים ומורכבים.
+*   **JSON**: מתאים למבני נתונים היררכיים.
+*   **CSV**: מצוין לטבלאות נתונים שטוחות וגדולות (שורת הכותרת הופכת למפתחות).
+
+## 🎯 איתור אלמנטים חכם (Smart Locators)
+
+התשתית משתמשת במנגנון גיבוי (fallback) חזק לזיהוי אלמנטים. ניתן להגדיר מספר לוקייטורים לכל אלמנט; אם הראשון נכשל, התשתית מנסה אוטומטית את הבא בתור.
+
+### אופן השימוש
+```python
+# In Page Object
+SEARCH_INPUT = [
+    {'type': 'id', 'value': 'search_query_top'},          # 1. נסה לפי ID
+    {'type': 'css', 'value': '#search_query_top'},        # 2. נסה לפי CSS
+    {'type': 'xpath', 'value': '//input[@name="search"]'} # 3. נסה לפי XPath
+]
+
+# In Test/Page Method
+self.type(self.SEARCH_INPUT, "Laptop", "Search Field")
+```
+*   **Fallback אוטומטי**: מנסה את הלוקייטורים באופן סדרתי.
+*   **לוגים**: מתעד איזה לוקייטור הצליח ואיזה נכשל.
+*   **כישלון**: מצלם מסך (Screenshot) אם כל הלוקייטורים נכשלו.
 
 ## 📋 דרישות קדם (Prerequisites)
 
@@ -55,80 +150,63 @@ automation-exercise/
 3.  **התקנת תלויות (Dependencies)**:
     ```bash
     pip install -r requirements.txt
-    ```
-
-4.  **התקנת דפדפני Playwright**:
-    ```bash
     playwright install
     ```
 
 ## 🏃 הרצת בדיקות (Running Tests)
 
-התשתית תומכת במספר מצבי הרצה המתאימים לפיתוח מקומי, CI/CD וסביבות Grid.
-
-### 1. הרצה מקומית (Local Execution)
-הרצת כל הבדיקות על דפדפן ברירת המחדל (מוגדר ב-`config/browsers.yaml`).
+### 1. הרצה מקומית (ברירת מחדל)
+הרצת כל הבדיקות על דפדפן ברירת המחדל.
 ```bash
 pytest
 ```
 
-### 2. הרצה במקביל (Parallel Execution)
-הרצת בדיקות במקביל לקיצור זמן הריצה (דורש `pytest-xdist`).
+### 2. הרצה במקביל
+הרצת בדיקות במקביל לקיצור זמן הריצה.
 ```bash
 pytest -n auto             # זיהוי אוטומטי של מספר המעבדים
 pytest -n 4                # הרצה עם 4 תהליכים (workers)
 ```
 
 ### 3. הרצה על דפדפן ספציפי
-הרצת בדיקות על פרופיל דפדפן ספציפי המוגדר ב-`config/browsers.yaml`.
+הרצת בדיקות על פרופיל דפדפן ספציפי מהמטריצה.
 ```bash
 pytest --browser=chrome_latest
 pytest --browser=firefox_latest
-pytest --browser=edge_latest
 ```
 
-### 4. הרצה מרוחקת (Remote / Grid Execution)
-הרצת בדיקות על Selenium Grid או Moon מרוחק.
+### 4. הרצה מרוחקת (Remote)
 ```bash
-# שימוש בפרמטרים ב-CLI
 pytest --remote --remote-url="http://localhost:4444/wd/hub"
-
-# שימוש ב-Marker בקוד
-# @pytest.mark.remote(url="http://grid-box:4444")
-```
-*הערה: וודא ששרת ה-Grid/Moon פעיל ונגיש.*
-
-### 5. הרצה לפי תגיות (Tagged Execution)
-הרצת בדיקות ספציפיות על בסיס Markers (מוגדרים ב-`pytest.ini`).
-```bash
-pytest -m smoke            # הרצת בדיקות עשן
-pytest -m regression       # הרצת רגרסיה מלאה
-pytest -m ui               # הרצת בדיקות UI
 ```
 
 ## 📊 דוחות (Reporting)
 
-הפרויקט משתמש ב-**Allure Reports** להצגה ויזואלית עשירה של תוצאות הבדיקה.
+הפרויקט משתמש ב-**Allure Reports**.
 
-1.  **הרצת בדיקות** (התוצאות נשמרות ב-`reports/<timestamp>/allure-results`):
-    ```bash
-    pytest
-    ```
-
+1.  **הרצת בדיקות** (התוצאות נשמרות ב-`reports/<timestamp>/allure-results`).
 2.  **יצירה וצפייה בדוח**:
     ```bash
     # צפייה ישירה
     allure serve reports/latest/allure-results
-
-    # או יצירת דוח סטטי
-    allure generate reports/latest/allure-results -o reports/allure-report --clean
-    allure open reports/allure-report
     ```
 
-## 🔧 קונפיגורציה (Configuration)
+### דיווח מתקדם (Advanced Reporting)
+ניתן להוסיף לוגים וצילומי מסך מותאמים אישית באמצעות ה-`ReportingManager`:
+```python
+from reporting.manager import ReportingManager
+ReportingManager.reporter().log_step("Custom step info")
+ReportingManager.reporter().attach_screenshot("Evidence", "/path/to/img.png")
+```
 
-*   **הגדרות גלובליות**: `config/config.yaml` (Base URL, Timeouts, Retries, Reporting).
-*   **פרופילי דפדפן**: `config/browsers.yaml` (הגדרת דפדפנים, גרסאות, רזולוציות, capabilities).
+## ❓ פתרון תקלות (Troubleshooting)
+
+| תקלה | פתרון |
+|-------|----------|
+| **הבדיקות לא רצות על כל הדפדפנים** | וודא שקובץ `browsers.yaml` מכיל סקציית `matrix` תקינה. |
+| **כישלון בהתחברות ל-Grid** | בדוק אם ה-Container של Docker רץ (`docker ps`) ופורט 4444 פתוח. |
+| **שגיאה בטעינת נתונים (Data Loader)** | וודא שהקובץ קיים בתיקיית `test_data/` ושהתחביר שלו תקין (YAML/JSON). |
+| **פקודת Allure לא נמצאה** | התקן את כלי ה-Commandline של Allure והוסף אותו ל-PATH. |
 
 ## 🤝 תרומה לפרויקט (Contribution)
 
