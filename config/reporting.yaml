@@ -1,0 +1,66 @@
+# Reporting Configuration
+# Define settings for test execution reports
+
+# Primary report type
+report_type: "allure"  # Options: allure, html, json, junit
+
+# Report output paths
+output_path: "reports"
+allure_results_path: "reports/allure-results"
+allure_report_path: "reports/allure-report"
+html_report_path: "reports/html-report"
+junit_report_path: "reports/junit"
+
+# Screenshot settings
+include_screenshots: true
+screenshot_format: "png"  # Options: png, jpeg
+screenshot_quality: 90  # 1-100 for jpeg
+attach_screenshots_to_report: true
+
+# Video recording settings
+record_video: false
+video_path: "reports/videos"
+video_size:
+  width: 1280
+  height: 720
+
+# Trace settings (Playwright traces)
+enable_traces: false
+traces_path: "reports/traces"
+trace_screenshots: true
+trace_snapshots: true
+
+# Report customization
+report_title: "Automation Test Results"
+report_description: "Playwright + pytest Automation Framework"
+include_environment_info: true
+include_test_duration: true
+include_retry_info: true
+
+# Environment info to include in reports
+environment:
+  project: "Automation Exercise"
+  framework: "Playwright + pytest"
+  python_version: "3.10+"
+  tester: "QA Team"
+
+# Allure specific settings
+allure:
+  generate_report_on_finish: false
+  clean_results_before_run: true
+  categories_file: "config/allure-categories.json"
+  
+# Log attachment settings
+attach_logs: true
+log_level_in_report: "INFO"
+
+# Performance metrics
+include_performance_metrics: true
+performance_thresholds:
+  page_load_max_ms: 3000
+  api_response_max_ms: 1000
+
+# Notification settings (for future integration)
+notifications:
+  enabled: false
+  channels: []  # e.g., slack, email, teams

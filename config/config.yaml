@@ -1,0 +1,33 @@
+# General Framework Configuration
+
+# Application settings
+base_url: "https://example.com"
+
+# Grid/Remote execution settings
+grid_url: "http://localhost:4444/wd/hub"
+
+# Timeout settings (in seconds)
+default_timeout: 10
+page_load_timeout: 30
+element_timeout: 5
+
+# Retry settings
+retries: 2
+retry_delay: 1
+
+# Browser settings
+headless: false
+browser_width: 1920
+browser_height: 1080
+
+# Logging settings
+log_level: "INFO"
+verbose_logging: false
+
+# Test execution settings
+parallel_workers: 4
+fail_fast: false
+
+# Screenshot settings
+screenshot_on_failure: true
+screenshot_path: "reports/screenshots"

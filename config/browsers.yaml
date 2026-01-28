@@ -1,0 +1,85 @@
+# Browser Configuration Matrix
+# Define different browser profiles for parallel test execution
+
+browsers:
+  # Chrome profiles
+  chrome_127:
+    browserName: "chromium"
+    browserVersion: "127.0"
+    platformName: "linux"
+    headless: false
+    viewport:
+      width: 1920
+      height: 1080
+    args:
+      - "--start-maximized"
+      - "--disable-blink-features=AutomationControlled"
+    
+  chrome_latest:
+    browserName: "chromium"
+    browserVersion: "latest"
+    platformName: "linux"
+    headless: false
+    viewport:
+      width: 1920
+      height: 1080
+    args:
+      - "--start-maximized"
+      - "--disable-blink-features=AutomationControlled"
+
+  # Firefox profiles
+  firefox_latest:
+    browserName: "firefox"
+    browserVersion: "latest"
+    platformName: "linux"
+    headless: false
+    viewport:
+      width: 1920
+      height: 1080
+    preferences:
+      "dom.webdriver.enabled": false
+      "useAutomationExtension": false
+
+  firefox_esr:
+    browserName: "firefox"
+    browserVersion: "115.0"
+    platformName: "linux"
+    headless: false
+    viewport:
+      width: 1920
+      height: 1080
+    preferences:
+      "dom.webdriver.enabled": false
+      "useAutomationExtension": false
+
+  # Edge profiles
+  edge_latest:
+    browserName: "msedge"
+    browserVersion: "latest"
+    platformName: "windows"
+    headless: false
+    viewport:
+      width: 1920
+      height: 1080
+    args:
+      - "--start-maximized"
+
+  # WebKit/Safari
+  webkit_latest:
+    browserName: "webkit"
+    browserVersion: "latest"
+    platformName: "mac"
+    headless: false
+    viewport:
+      width: 1920
+      height: 1080
+
+# Default browser to use if not specified
+default_browser: "chrome_127"
+
+# Browser capabilities for remote execution
+remote_capabilities:
+  enableVNC: true
+  enableVideo: false
+  sessionTimeout: "5m"
+  timeZone: "UTC"
