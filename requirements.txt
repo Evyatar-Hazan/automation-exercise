@@ -1,0 +1,14 @@
+# Core Testing Framework
+playwright==1.48.0
+pytest==8.3.4
+pytest-xdist==3.6.1
+
+# Reporting
+allure-pytest==2.13.5
+
+# Configuration & Utilities
+pyyaml==6.0.2
+python-dotenv==1.0.1
+
+# Logging
+loguru==0.7.3
