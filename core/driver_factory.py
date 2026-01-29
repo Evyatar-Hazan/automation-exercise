@@ -6,6 +6,7 @@ Supports both local and remote execution with retry mechanisms.
 
 import time
 import json
+import urllib.parse
 from typing import Optional, Dict, Any, Union
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page, Playwright
 from loguru import logger
@@ -164,7 +165,7 @@ class DriverFactory:
         # Validate remote configuration
         if self.remote and not self.remote_url:
             # Try to get from framework config as fallback
-            self.remote_url = self.framework_config.get('remote_url')
+            self.remote_url = self.framework_config.get('remote_url') or self.framework_config.get('grid_url')
             if not self.remote_url:
                 logger.warning(
                     "Remote execution requested but no remote_url provided. "
@@ -362,8 +363,8 @@ class DriverFactory:
         """
         Create a remote browser instance via Playwright Grid / Moon.
         
-        Uses Playwright's browserType.connect_over_cdp() method to connect to a
-        remote Playwright service (Moon or Grid with Playwright support).
+        Uses Playwright's browserType.connect() to establish a websocket connection
+        to the Moon/Grid instance, passing capabilities via the URL query parameters.
         
         Returns:
             Playwright Page object connected to remote browser
@@ -384,7 +385,7 @@ class DriverFactory:
             # Start Playwright
             self._playwright = sync_playwright().start()
             
-            # Get browser type
+            # Get browser type (chromium, firefox, webkit)
             browser_type_name = self._get_browser_type_name()
             browser_type = getattr(self._playwright, browser_type_name)
             
@@ -392,32 +393,28 @@ class DriverFactory:
             capabilities = RemoteCapabilitiesMapper.map_to_remote_capabilities(
                 self.browser_profile
             )
-            logger.info(
-                f"Remote capabilities: {json.dumps(capabilities, indent=2)}"
-            )
             
-            # Connect to remote browser via Selenium Grid using WebDriver API
-            # Playwright can connect to any WebDriver-compliant server
-            try:
-                # Use launch with connect_over_cdp to Selenium Grid
-                # Selenium Grid 4.x exposes WebDriver and CDP endpoints
-                cdp_endpoint = f"{self.remote_url}/wd/hub"
-                logger.debug(f"Attempting WebDriver connection to: {cdp_endpoint}")
-                
-                # For Selenium Grid, we use the WebDriver protocol
-                # Launch browser locally and connect over CDP if available
-                self._browser = browser_type.launch(
-                    args=['--disable-blink-features=AutomationControlled']
-                )
-                logger.info("Connected to remote Grid via local launch (Selenium compatibility mode)")
-            except Exception as cdp_error:
-                logger.debug(f"Connection failed: {cdp_error}. Grid may be unavailable.")
-                raise ValueError(
-                    f"Failed to establish remote connection to {self.remote_url}. "
-                    f"Ensure the Grid/Moon service is running and accessible."
-                ) from cdp_error
+            # Encode capabilities for URL
+            caps_json = json.dumps(capabilities)
+            encoded_caps = urllib.parse.quote(caps_json)
+            logger.debug(f"Encoded capabilities: {encoded_caps}")
             
-            # Create context with capabilities
+            # Construct Moon WebSocket Endpoint
+            # Format: ws://MOON_HOST/playwright/{browser}?capabilities={json}
+            parsed_url = urllib.parse.urlparse(self.remote_url)
+            scheme = 'wss' if parsed_url.scheme == 'https' else 'ws'
+            host = parsed_url.netloc
+            
+            ws_endpoint = f"{scheme}://{host}/playwright/{browser_type_name}?capabilities={encoded_caps}"
+            logger.info(f"Connecting to Moon endpoint: {ws_endpoint}")
+            
+            # Connect to Moon
+            self._browser = browser_type.connect(ws_endpoint)
+            logger.info("Successfully connected to remote browser")
+            
+            # Create context
+            # Note: Viewport and other options are handled by Moon via capabilities,
+            # but we pass context options for client-side behaviors like locale/timezone
             context_options = self._get_context_options()
             self._context = self._browser.new_context(**context_options)
             logger.info("Remote browser context created")

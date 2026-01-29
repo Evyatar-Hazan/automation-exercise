@@ -1,0 +1,33 @@
+version: '3'
+services:
+  moon:
+    image: aerokube/moon:latest
+    container_name: moon
+    ports:
+      - "4444:4444"       # WebSocket endpoint
+      - "8080:8080"       # UI (optional)
+    environment:
+      - MOON_ENABLE_PLAYWRIGHT=true   # קריטי!
+      - MOON_ENABLE_VIDEO=true
+      - MOON_VIDEO_OUTPUT_DIR=/opt/moon/video
+      - MOON_K8S_ENABLED=false
+    volumes:
+      - ./reports/video:/opt/moon/video
+    networks:
+      - automation-exercise_default
+
+  moon-ui:
+    image: aerokube/moon-ui:latest
+    container_name: moon-ui
+    depends_on:
+      - moon
+    ports:
+      - "8090:8080"       # UI של Moon
+    environment:
+      - MOON_URI=http://moon:4444
+    networks:
+      - automation-exercise_default
+
+networks:
+  automation-exercise_default:
+    driver: bridge

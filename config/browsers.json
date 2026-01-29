@@ -1,0 +1,35 @@
+{
+    "chromium": {
+        "default": "latest",
+        "versions": {
+            "latest": {
+                "image": "mcr.microsoft.com/playwright:v1.44.0-jammy",
+                "port": "4444",
+                "path": "/ws",
+                "command": ["/bin/bash", "-c", "npx -y playwright run-server --port 4444 --path /ws --host 0.0.0.0"]
+            }
+        }
+    },
+    "firefox": {
+        "default": "latest",
+        "versions": {
+            "latest": {
+                "image": "mcr.microsoft.com/playwright:v1.44.0-jammy",
+                "port": "4444",
+                "path": "/ws",
+                "command": ["/bin/bash", "-c", "npx -y playwright run-server --port 4444 --path /ws --host 0.0.0.0"]
+            }
+        }
+    },
+    "webkit": {
+        "default": "latest",
+        "versions": {
+            "latest": {
+                "image": "mcr.microsoft.com/playwright:v1.44.0-jammy",
+                "port": "4444",
+                "path": "/ws",
+                "command": ["/bin/bash", "-c", "npx -y playwright run-server --port 4444 --path /ws"]
+            }
+        }
+    }
+}
